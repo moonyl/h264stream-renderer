@@ -39,7 +39,7 @@ class WsRawH264Player {
       //log("Dropping frames", this.framesList.length);
       console.log("Dropping frames", this.frameList.length);
       // PPS SPS IDR 이 한꺼번에 들어온다.
-      const vI = this.frameList.findIndex(e => (e[4] & 0x1f) === 7);
+      const vI = this.frameList.findIndex(e => (e.frame[4] & 0x1f) === 7);
       // console.log('Dropping frames', framesList.length, vI)
       if (vI >= 0) {
         this.frameList = this.frameList.slice(vI);
@@ -49,7 +49,8 @@ class WsRawH264Player {
 
     //let type;
 
-    const frame = this.frameList.shift();
+    const elem = this.frameList.shift();
+    //console.log("elem:", { elem });
     //console.log(this.frameList.length);
     //console.log({ frame });
     //type = frame[4] & 0x1f;
@@ -57,23 +58,39 @@ class WsRawH264Player {
     //this.emit("frame_shift", this.frameList.length);
 
     //if (frame) this.H264Player.decode(frame);
-    if (frame) {
-      //const type = frame[4] & 0x1f;
-      //if (type === 7 || type === 8) {
-      this.H264Player.decode(frame);
-      //}
+    if (elem) {
+      const { frame, show } = elem;
+      if (frame) {
+        //const type = frame[4] & 0x1f;
+        //if (type === 7 || type === 8) {
+        this.H264Player.decode(frame);
+        //}
+      }
+      if (show) {
+        requestAnimationFrame(this.shiftFrame);
+        return;
+      }
     }
 
+    //requestAnimationFrame(this.shiftFrame);
+    setTimeout(this.shiftFrame, 1);
     // TODO : 여기에서 그릴지 말지를 결정해야 하지 않을까?
-    requestAnimationFrame(this.shiftFrame);
   };
 
   pushAvPacket = packet => {
     //console.log({ packet });
+    // header, show, size 를 분리해야 한다.
     packet.arrayBuffer().then(buffer => {
-      const frame = new Uint8Array(buffer);
-      //console.log({ frame });
-      this.frameList.push(frame);
+      const headerStr = new TextDecoder("utf-8").decode(new Uint8Array(buffer, 0, 3));
+      if (headerStr === "psd") {
+        const show = new Uint8Array(buffer, 3, 1); // 1 or 0
+        //const size = new Uint32Array(buffer, 4, 1); // size
+        //console.log({ headerStr, show, size });
+        const frame = new Uint8Array(buffer, 8);
+        //console.log({ frame });
+        //console.log({ frame });
+        this.frameList.push({ frame, show });
+      }
       //console.log([frame[0], frame[1], frame[2], frame[3], frame[4]]);
     });
 
